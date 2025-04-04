@@ -2,3 +2,7 @@ __pycache__
 wandb
 runs
 outputs
+env
+__pycache__
+*.csv
+*.pt

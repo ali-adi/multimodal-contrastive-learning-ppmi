@@ -12,6 +12,7 @@ from utils.ssl_online_custom import SSLOnlineEvaluator
 from datasets.ContrastiveImagingAndTabularDataset import ContrastiveImagingAndTabularDataset
 from datasets.ContrastiveImageDataset import ContrastiveImageDataset
 from datasets.ContrastiveTabularDataset import ContrastiveTabularDataset
+from datasets.PPMIDataset import PPMIDataset
 
 from models.MultimodalSimCLR import MultimodalSimCLR
 from models.SimCLR import SimCLR
@@ -51,13 +52,35 @@ def load_datasets(hparams):
     train_dataset = ContrastiveTabularDataset(hparams.data_train_tabular, hparams.labels_train, hparams.corruption_rate, hparams.field_lengths_tabular, hparams.one_hot)
     val_dataset = ContrastiveTabularDataset(hparams.data_val_tabular, hparams.labels_val, hparams.corruption_rate, hparams.field_lengths_tabular, hparams.one_hot)
     hparams.input_size = train_dataset.get_input_size()
+  elif hparams.datatype == 'ppmi':
+    train_dataset = PPMIDataset(
+      processed_data_dir=hparams.data_base,
+      img_size=hparams.input_size,
+      live_loading=True,
+      train=True,
+      augmentation=hparams.transform_train,
+      augmentation_rate=hparams.augmentation_rate,
+      one_hot_tabular=hparams.one_hot,
+      corruption_rate=hparams.corruption_rate
+    )
+    val_dataset = PPMIDataset(
+      processed_data_dir=hparams.data_base,
+      img_size=hparams.input_size,
+      live_loading=True,
+      train=False,
+      augmentation=hparams.transform_val,
+      augmentation_rate=hparams.augmentation_rate,
+      one_hot_tabular=hparams.one_hot,
+      corruption_rate=hparams.corruption_rate
+    )
+    hparams.input_size = train_dataset.get_input_size()
   else:
     raise Exception(f'Unknown datatype {hparams.datatype}')
   return train_dataset, val_dataset
 
 
 def select_model(hparams, train_dataset):
-  if hparams.datatype == 'multimodal':
+  if hparams.datatype == 'multimodal' or hparams.datatype == 'ppmi':
     model = MultimodalSimCLR(hparams)
   elif hparams.datatype == 'imaging':
     if hparams.loss.lower() == 'byol':

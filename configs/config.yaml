@@ -1,7 +1,7 @@
 defaults:
   - _self_
   - models: resnet50
-  - dataset: cardiac_new
+  - dataset: ppmi
 
 # Command Center
 pretrain: False
@@ -22,11 +22,11 @@ lr_finder_lrs:
   - 1.e-4
 multitarget:
 
-wandb_entity: 
-data_base: 
-num_workers: 48
+wandb_entity: ali-adi
+data_base: /Users/ali/root/University/Y4S2/FYP/GitHub/multimodal-contrastive-learning-ppmi
+num_workers: 0
 
-wandb_project: 
+wandb_project: ppmi-contrastive
 sql_address: 
 
 

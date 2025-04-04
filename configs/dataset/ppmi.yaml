@@ -1,0 +1,34 @@
+# @package _global_
+datatype: ppmi
+
+# Data paths
+data_train_tabular: ${data_base}/processed-data/data_tabular.pt
+data_train_imaging: ${data_base}/processed-data/data_imaging.pt
+field_lengths_tabular: ${data_base}/processed-data/field_lengths_tabular.pt
+
+# Model parameters
+input_size: 224
+num_channels: 2  # T1 and FA
+tabular_input_size: 12
+
+# Data augmentation
+transform_train:
+  - random_crop
+  - random_horizontal_flip
+  - random_vertical_flip
+  - random_rotation
+  - random_affine
+  - normalize
+
+transform_val:
+  - center_crop
+  - normalize
+
+transform_test:
+  - center_crop
+  - normalize
+
+# Dataset parameters
+dataset_length: 311  # Based on your dataset size
+combine_train_and_val: False
+weighted_sampler: False 
