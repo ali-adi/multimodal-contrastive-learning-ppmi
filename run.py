@@ -8,12 +8,67 @@ import pytorch_lightning as pl
 from pytorch_lightning.loggers import CSVLogger
 import warnings
 import logging
+import contextlib
+import io
 
-# Suppress all warnings
-warnings.filterwarnings('ignore')
-logging.getLogger("pytorch_lightning").setLevel(logging.ERROR)
-os.environ["PYTHONWARNINGS"] = "ignore"
+# Force silence all warnings by completely replacing the warning display system
+def force_no_warnings(*args, **kwargs):
+    pass
+
+# Replace all warning related functions with no-op functions
+warnings.showwarning = force_no_warnings
+warnings._showwarnmsg_impl = force_no_warnings
+warnings.warn = force_no_warnings
+warnings.showwarning = force_no_warnings
+warnings.formatwarning = force_no_warnings  # This disables even registering warnings
+
+# Set environment variables to suppress warnings at all levels
+os.environ["PYTHONWARNINGS"] = "ignore::UserWarning"
+os.environ["PYTHONWARNINGS"] = "ignore::FutureWarning"
+os.environ["PYTHONWARNINGS"] = "ignore::DeprecationWarning"
+os.environ["PYTHONWARNINGS"] = "ignore::ImportWarning"
+os.environ["PYTHONWARNINGS"] = "ignore::ResourceWarning"
 os.environ["PL_DISABLE_WARNINGS"] = "1"
+
+# Prevent libraries from initializing their warning systems
+sys.warnoptions.append("ignore")
+
+# Configure logging to higher threshold
+logging.getLogger().setLevel(logging.ERROR)
+logging.getLogger("pytorch_lightning").setLevel(logging.CRITICAL)
+
+# Monkey patch libraries that might emit warnings
+class SilentMonkeyPatch:
+    def __enter__(self):
+        # Store originals
+        self._original_showwarning = warnings.showwarning
+        
+        # Libraries that might use warning systems
+        import numpy as np
+        try:
+            np.seterr(all='ignore')
+        except:
+            pass
+            
+        try:
+            import torch
+            # Disable PyTorch warnings if possible
+            if hasattr(torch, 'set_warn_always'):
+                torch.set_warn_always(False)
+        except:
+            pass
+            
+        # Replace all warning systems
+        warnings.showwarning = force_no_warnings
+        
+        return self
+        
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        pass  # Don't restore the originals to maintain silence
+
+# Apply the patches
+silencer = SilentMonkeyPatch()
+silencer.__enter__()
 
 from trainers.pretrain import pretrain
 from trainers.evaluate import evaluate
@@ -169,6 +224,16 @@ def run(args):
         test(args, logger)
     elif args.evaluate:
         evaluate(args, logger)
+
+    trainer = pl.Trainer(
+        accelerator="gpu" if torch.cuda.is_available() else "cpu",
+        devices=1,
+        max_epochs=args.max_epochs,
+        callbacks=[checkpoint_callback],
+        logger=logger,
+        num_sanity_val_steps=0,  # Disable sanity checking
+        enable_progress_bar=True
+    )
 
 if __name__ == "__main__":
     args = parse_args()

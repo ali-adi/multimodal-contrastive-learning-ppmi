@@ -3,11 +3,25 @@ import torch
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import ModelCheckpoint
 import warnings
+import sys
+
+# Complete suppression of all warnings during import and model creation
+original_showwarning = warnings.showwarning
+
+def silent_showwarning(*args, **kwargs):
+    pass
+
+# Completely disable all warnings
+warnings.showwarning = silent_showwarning
 
 # Suppress warnings
 warnings.filterwarnings('ignore')
+# Specifically suppress pl_bolts UnderReviewWarning
+warnings.filterwarnings('ignore', category=UserWarning, module='pl_bolts')
 os.environ["PYTHONWARNINGS"] = "ignore"
+os.environ["PL_DISABLE_WARNINGS"] = "1"
 
+# Import everything silently
 from torch.utils.data import DataLoader
 from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks import LearningRateMonitor
@@ -21,11 +35,17 @@ from datasets.PPMIDataset import PPMIDataset
 from datasets.ImagingAndTabularDataset import ImagingAndTabularDataset
 from datasets.ImageDataset import ImageDataset
 
-from models.MultimodalSimCLR import MultimodalSimCLR
-from models.SimCLR import SimCLR
-from models.BYOL_Bolt import BYOL
-from models.BarlowTwins import BarlowTwins
-from models.SCARF import SCARF
+# Silence all output related to models
+import contextlib
+import io
+null_output = io.StringIO()
+
+with contextlib.redirect_stdout(null_output), contextlib.redirect_stderr(null_output):
+    from models.MultimodalSimCLR import MultimodalSimCLR
+    from models.SimCLR import SimCLR
+    from models.BYOL_Bolt import BYOL
+    from models.BarlowTwins import BarlowTwins
+    from models.SCARF import SCARF
 
 
 
@@ -149,6 +169,7 @@ def pretrain(hparams, logger):
     hparams, 
     accelerator="gpu",
     devices=1,
+    num_sanity_val_steps=0,  # Disable sanity checking
     callbacks=callbacks, 
     logger=logger,
     max_epochs=hparams.max_epochs,

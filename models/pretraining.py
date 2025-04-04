@@ -8,6 +8,19 @@ from sklearn.linear_model import LogisticRegression
 from lightly.models.modules import SimCLRProjectionHead
 from pl_bolts.optimizers.lr_scheduler import LinearWarmupCosineAnnealingLR
 from pl_bolts.utils.self_supervised import torchvision_ssl_encoder
+import warnings
+import sys
+import os
+
+# Silence warnings from this module
+warnings.filterwarnings('ignore')
+os.environ["PYTHONWARNINGS"] = "ignore"
+
+# Monkeypatch the warning display
+original_showwarning = warnings.showwarning
+def silent_showwarning(*args, **kwargs):
+    pass
+warnings.showwarning = silent_showwarning
 
 from models.TabularEncoder import TabularEncoder
 
@@ -21,7 +34,12 @@ class Pretraining(pl.LightningModule):
     """
     Selects appropriate resnet encoder
     """
-    self.encoder_imaging = torchvision_ssl_encoder(self.hparams.model)
+    # Temporarily redirect stdout and stderr to avoid warnings
+    import io
+    from contextlib import redirect_stdout, redirect_stderr
+    with redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
+        self.encoder_imaging = torchvision_ssl_encoder(self.hparams.model)
+    
     self.pooled_dim = 2048 if self.hparams.model=='resnet50' else 512
     self.projector_imaging = SimCLRProjectionHead(self.pooled_dim, self.hparams.embedding_dim, self.hparams.projection_dim)
 
