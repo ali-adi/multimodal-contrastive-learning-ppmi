@@ -56,7 +56,7 @@ class Pretraining(pl.LightningModule):
     """
     Can load imaging encoder with pretrained weights from previous checkpoint/run
     """
-    loaded_chkpt = torch.load(self.hparams.imaging_pretrain_checkpoint)
+    loaded_chkpt = torch.load(self.hparams.imaging_pretrain_checkpoint, weights_only=False)
     state_dict = loaded_chkpt['state_dict']
     state_dict_encoder = {}
     for k in list(state_dict.keys()):

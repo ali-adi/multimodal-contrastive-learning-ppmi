@@ -1,7 +1,81 @@
-defaults:
-  - _self_
-  - models: resnet50
-  - dataset: ppmi
+# Model Configuration
+model: resnet50
+dataset: ppmi
+
+# Training Parameters
+pretrain: False
+run_eval: True
+seed: 2022
+max_epochs: 500
+
+# Data Parameters
+data_base: /Users/ali/root/University/Y4S2/FYP/GitHub/multimodal-contrastive-learning-ppmi
+num_workers: 0
+batch_size: 512
+
+# Multimodal Parameters
+weight_decay: 1.e-4
+scheduler: anneal
+anneal_max_epochs: 200
+warmup_epochs: 10
+temperature: 0.1
+projection_dim: 128
+use_projection_head: True
+
+loss: clip
+view: augmented
+lambda_0: 0.5
+momentum: 0.99
+
+# Model Strategy
+tabular_pretrain_checkpoint: null
+pretrained_tabular_strategy: frozen
+imaging_pretrain_checkpoint: null
+pretrained_imaging_strategy: trainable
+multiple_lr: False
+
+# Evaluation Parameters
+lr_eval: 1.e-3
+weight_decay_eval: 0
+val_check_interval: 1.0
+check_val_every_n_epoch: 1
+
+# Classifier Parameters
+classifier_num_layers: 2
+lr_classifier: 3.e-4
+weight_decay_classifier: 1.e-4
+online_mlp: True
+
+# Imaging Parameters
+augmentation_rate: 0.95
+crop_scale_lower: 0.08
+
+# Tabular Parameters
+corruption_rate: 0.3
+one_hot: True
+eval_one_hot: True
+
+encoder_num_layers: 2
+projector_num_layers: 1
+init_strat: kaiming
+
+# Evaluation Settings
+generate_embeddings: False
+keep_projector: False
+eval_train_augment_rate: 0.8
+eval_classifier: linear
+finetune_strategy: frozen
+
+# General Settings
+log_images: False
+enable_progress_bar: True
+evaluate: True
+test: False
+test_and_eval: False
+combine_train_and_val: False
+weighted_sampler: False
+classifier_freq: 5
+unit_test: False
 
 # Command Center
 pretrain: False

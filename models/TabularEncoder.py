@@ -16,7 +16,7 @@ class TabularEncoder(nn.Module):
 
     # Check if we are loading a pretrained model
     if args.checkpoint:
-      loaded_chkpt = torch.load(args.checkpoint)
+      loaded_chkpt = torch.load(args.checkpoint, weights_only=False)
       original_args = loaded_chkpt['hyper_parameters']
       state_dict = loaded_chkpt['state_dict']
       self.input_size = original_args['input_size']

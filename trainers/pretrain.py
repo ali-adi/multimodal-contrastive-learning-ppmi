@@ -5,8 +5,9 @@ from torch.utils.data import DataLoader
 import pytorch_lightning as pl
 from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor
+from pytorch_lightning.loggers import CSVLogger
 
-from utils.utils import grab_image_augmentations, grab_wids, create_logdir
+from utils.utils import grab_image_augmentations, grab_wids
 from utils.ssl_online_custom import SSLOnlineEvaluator
 
 from datasets.ContrastiveImagingAndTabularDataset import ContrastiveImagingAndTabularDataset
@@ -54,7 +55,7 @@ def load_datasets(hparams):
     hparams.input_size = train_dataset.get_input_size()
   elif hparams.datatype == 'ppmi':
     train_dataset = PPMIDataset(
-      processed_data_dir=hparams.data_base,
+      processed_data_dir=os.path.join(hparams.data_base, 'processed-data'),
       img_size=hparams.input_size,
       live_loading=True,
       train=True,
@@ -64,7 +65,7 @@ def load_datasets(hparams):
       corruption_rate=hparams.corruption_rate
     )
     val_dataset = PPMIDataset(
-      processed_data_dir=hparams.data_base,
+      processed_data_dir=os.path.join(hparams.data_base, 'processed-data'),
       img_size=hparams.input_size,
       live_loading=True,
       train=False,
@@ -103,13 +104,13 @@ def select_model(hparams, train_dataset):
   return model
 
 
-def pretrain(hparams, wandb_logger):
+def pretrain(hparams, logger):
   """
   Train code for pretraining or supervised models. 
   
   IN
   hparams:      All hyperparameters
-  wandb_logger: Instantiated weights and biases logger
+  logger:       PyTorch Lightning logger (CSVLogger)
   """
   pl.seed_everything(hparams.seed)
 
@@ -119,15 +120,16 @@ def pretrain(hparams, wandb_logger):
   train_loader = DataLoader(
     train_dataset,
     num_workers=hparams.num_workers, batch_size=hparams.batch_size,  
-    pin_memory=True, shuffle=True, persistent_workers=True)
+    pin_memory=True, shuffle=True, persistent_workers=(hparams.num_workers > 0))
 
   val_loader = DataLoader(
     val_dataset,
     num_workers=hparams.num_workers, batch_size=hparams.batch_size,  
-    pin_memory=True, shuffle=False, persistent_workers=True)
+    pin_memory=True, shuffle=False, persistent_workers=(hparams.num_workers > 0))
 
-  # Create logdir based on WandB run name
-  logdir = create_logdir(hparams.datatype, hparams.resume_training, wandb_logger)
+  # Create log directory
+  logdir = os.path.join(hparams.data_base, 'runs', hparams.datatype, 'checkpoints')
+  os.makedirs(logdir, exist_ok=True)
   
   model = select_model(hparams, train_dataset)
   
@@ -139,7 +141,18 @@ def pretrain(hparams, wandb_logger):
   callbacks.append(ModelCheckpoint(filename='checkpoint_last_epoch_{epoch:02d}', dirpath=logdir, save_on_train_epoch_end=True, auto_insert_metric_name=False))
   callbacks.append(LearningRateMonitor(logging_interval='epoch'))
 
-  trainer = Trainer.from_argparse_args(hparams, gpus=1, callbacks=callbacks, logger=wandb_logger, max_epochs=hparams.max_epochs, check_val_every_n_epoch=hparams.check_val_every_n_epoch, limit_train_batches=hparams.limit_train_batches, limit_val_batches=hparams.limit_val_batches, enable_progress_bar=hparams.enable_progress_bar)
+  trainer = Trainer.from_argparse_args(
+    hparams, 
+    accelerator="gpu",
+    devices=1,
+    callbacks=callbacks, 
+    logger=logger,
+    max_epochs=hparams.max_epochs,
+    check_val_every_n_epoch=hparams.check_val_every_n_epoch,
+    limit_train_batches=hparams.limit_train_batches,
+    limit_val_batches=hparams.limit_val_batches,
+    enable_progress_bar=hparams.enable_progress_bar
+  )
 
   if hparams.resume_training:
     trainer.fit(model, train_loader, val_loader, ckpt_path=hparams.checkpoint)

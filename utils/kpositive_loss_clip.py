@@ -20,7 +20,7 @@ class KPositiveLossCLIP(nn.Module):
         self.temperature = temperature
         self.k = k
 
-        self.cosine_similarity_matrix = torch.load(cosine_similarity_matrix_path, map_location='cuda')
+        self.cosine_similarity_matrix = torch.load(cosine_similarity_matrix_path, map_location='cuda', weights_only=False)
         self.cosine_similarity_matrix[self.cosine_similarity_matrix>threshold] = 1
         self.cosine_similarity_matrix = torch.threshold(self.cosine_similarity_matrix, threshold, 0)
 

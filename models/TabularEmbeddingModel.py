@@ -14,7 +14,7 @@ class TabularEmbeddingModel(nn.Module):
     self.keep_projector = args.keep_projector
 
     # Load weights
-    loaded_chkpt = torch.load(args.checkpoint)
+    loaded_chkpt = torch.load(args.checkpoint, weights_only=False)
     original_args = loaded_chkpt['hyper_parameters']
     state_dict = loaded_chkpt['state_dict']
 

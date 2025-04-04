@@ -99,7 +99,7 @@ def grab_arg_from_checkpoint(args: str, arg_name: str):
   Loads a lightning checkpoint and returns an argument saved in that checkpoints hyperparameters
   """
   if args.checkpoint:
-    ckpt = torch.load(args.checkpoint)
+    ckpt = torch.load(args.checkpoint, weights_only=False)
     load_args = ckpt['hyper_parameters']
   else:
     load_args = args
@@ -109,14 +109,13 @@ def chkpt_contains_arg(ckpt_path: str, arg_name: str):
   """
   Checks if a checkpoint contains a given argument.
   """
-  ckpt = torch.load(ckpt_path)
+  ckpt = torch.load(ckpt_path, weights_only=False)
   return arg_name in ckpt['hyper_parameters']
 
 def prepend_paths(hparams):
   db = hparams.data_base
   
   for hp in [
-    'labels_train', 'labels_val', 
     'data_train_imaging', 'data_val_imaging', 
     'data_val_eval_imaging', 'labels_val_eval_imaging', 
     'train_similarity_matrix', 'val_similarity_matrix', 
@@ -127,10 +126,18 @@ def prepend_paths(hparams):
     'field_indices_tabular', 'field_lengths_tabular',
     'data_test_eval_tabular', 'labels_test_eval_tabular',
     'data_test_eval_imaging', 'labels_test_eval_imaging',
-    ]:
-    if hp in hparams and hparams[hp]:
-      hparams['{}_short'.format(hp)] = hparams[hp]
-      hparams[hp] = join(db, hparams[hp])
+    'labels_train', 'labels_val', 'labels_test',
+    'data_test_tabular', 'data_test_imaging'
+  ]:
+    if hasattr(hparams, hp) and getattr(hparams, hp):
+      # Store the original path
+      setattr(hparams, f'{hp}_short', getattr(hparams, hp))
+      
+      # Always ensure the path is in the processed-data directory
+      path = getattr(hparams, hp)
+      if not path.startswith('processed-data'):
+        path = os.path.join('processed-data', path)
+      setattr(hparams, hp, os.path.join(db, path))
 
   return hparams
 
@@ -138,7 +145,6 @@ def re_prepend_paths(hparams):
   db = hparams.data_base
   
   for hp in [
-    'labels_train', 'labels_val', 
     'data_train_imaging', 'data_val_imaging', 
     'data_val_eval_imaging', 'labels_val_eval_imaging', 
     'train_similarity_matrix', 'val_similarity_matrix', 
@@ -149,9 +155,15 @@ def re_prepend_paths(hparams):
     'field_indices_tabular', 'field_lengths_tabular',
     'data_test_eval_tabular', 'labels_test_eval_tabular',
     'data_test_eval_imaging', 'labels_test_eval_imaging',
-    ]:
-    if hp in hparams and hparams[hp]:
-      hparams[hp] = join(db, hparams['{}_short'.format(hp)])
+    'labels_train', 'labels_val', 'labels_test',
+    'data_test_tabular', 'data_test_imaging'
+  ]:
+    if hasattr(hparams, hp) and getattr(hparams, hp):
+      # Always ensure the path is in the processed-data directory
+      path = getattr(hparams, hp)
+      if not path.startswith('processed-data'):
+        path = os.path.join('processed-data', path)
+      setattr(hparams, hp, os.path.join(db, path))
 
   return hparams
 

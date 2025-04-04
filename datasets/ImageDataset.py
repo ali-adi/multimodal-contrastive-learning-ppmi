@@ -19,8 +19,8 @@ class ImageDataset(Dataset):
     self.live_loading = live_loading
     self.task = task
 
-    self.data = torch.load(data)
-    self.labels = torch.load(labels)
+    self.data = torch.load(data, weights_only=False)
+    self.labels = torch.load(labels, weights_only=False)
 
     if delete_segmentation:
       for im in self.data:

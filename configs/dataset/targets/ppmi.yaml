@@ -1,0 +1,30 @@
+# @package _global_
+defaults:
+  - _self_
+
+target: ppmi
+low_data_splits: ['']
+
+# Training labels
+labels_train: ${data_base}/processed-data/labels_train.pt
+labels_val: ${data_base}/processed-data/labels_val.pt
+
+# Tabular data evaluation
+data_train_eval_tabular: ${data_base}/processed-data/data_tabular_train.pt
+labels_train_eval_tabular: ${data_base}/processed-data/labels_train.pt
+
+data_val_eval_tabular: ${data_base}/processed-data/data_tabular_val.pt
+labels_val_eval_tabular: ${data_base}/processed-data/labels_val.pt
+
+data_test_eval_tabular: ${data_base}/processed-data/data_tabular_test.pt
+labels_test_eval_tabular: ${data_base}/processed-data/labels_test.pt
+
+# Imaging data evaluation
+data_train_eval_imaging: ${data_base}/processed-data/data_imaging_train.pt
+labels_train_eval_imaging: ${data_base}/processed-data/labels_train.pt
+
+data_val_eval_imaging: ${data_base}/processed-data/data_imaging_val.pt
+labels_val_eval_imaging: ${data_base}/processed-data/labels_val.pt
+
+data_test_eval_imaging: ${data_base}/processed-data/data_imaging_test.pt
+labels_test_eval_imaging: ${data_base}/processed-data/labels_test.pt 

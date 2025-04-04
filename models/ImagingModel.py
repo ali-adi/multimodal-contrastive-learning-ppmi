@@ -13,7 +13,7 @@ class ImagingModel(nn.Module):
 
     if args.checkpoint:
       # Load weights
-      checkpoint = torch.load(args.checkpoint)
+      checkpoint = torch.load(args.checkpoint, weights_only=False)
       original_args = checkpoint['hyper_parameters']
       state_dict = checkpoint['state_dict']
       self.pooled_dim = 2048 if original_args['model']=='resnet50' else 512

@@ -25,7 +25,7 @@ class PPMIDataset(Dataset):
         img_size: int = 224,
         live_loading: bool = True,
         train: bool = True,
-        augmentation: transforms.Compose = None,
+        augmentation = None,
         augmentation_rate: float = 0.5,
         one_hot_tabular: bool = False,
         corruption_rate: float = 0.2
@@ -38,7 +38,7 @@ class PPMIDataset(Dataset):
             img_size: Size to resize images to
             live_loading: Whether to load images from disk or use pre-loaded tensors
             train: Whether this is for training or evaluation
-            augmentation: Transforms to apply for augmentation
+            augmentation: Transforms to apply for augmentation (can be a list or a composed transform)
             augmentation_rate: Probability of applying augmentation to the second view
             one_hot_tabular: Whether to one-hot encode tabular data
             corruption_rate: Rate at which to corrupt tabular features for contrastive learning
@@ -49,10 +49,11 @@ class PPMIDataset(Dataset):
         self.train = train
         self.one_hot_tabular = one_hot_tabular
         self.corruption_rate = corruption_rate
+        self.augmentation_rate = augmentation_rate
         
         # Load data
-        self.data_tabular = torch.load(self.processed_data_dir / 'data_tabular.pt')
-        self.field_lengths_tabular = torch.load(self.processed_data_dir / 'field_lengths_tabular.pt')
+        self.data_tabular = torch.load(self.processed_data_dir / 'data_tabular.pt', weights_only=False)
+        self.field_lengths_tabular = torch.load(self.processed_data_dir / 'field_lengths_tabular.pt', weights_only=False)
         self.patient_ids = torch.load(self.processed_data_dir / 'patient_ids.pt', weights_only=False)
         self.image_paths = torch.load(self.processed_data_dir / 'data_imaging.pt', weights_only=False)
         
@@ -64,22 +65,41 @@ class PPMIDataset(Dataset):
         self.patient_to_idx = {str(pid): i for i, pid in enumerate(self.patient_ids)}
         print(f"Patient IDs in tabular data: {list(self.patient_to_idx.keys())[:5]}...")
         
-        # Create a list of valid indices (patients that have both tabular and imaging data)
-        self.valid_indices = []
-        for i, img_path in enumerate(self.image_paths[::2]):  # Step by 2 since each patient has 2 images
+        # Create a mapping from patient ID to image paths
+        self.patient_to_images = {}
+        for img_path in self.image_paths:
             try:
-                # Extract patient ID from path
+                # Try different methods to extract patient ID
                 path_parts = img_path.split('/')
-                ppmi_index = path_parts.index('PPMI')
-                patient_id = path_parts[ppmi_index + 2]  # Get the ID after the second 'PPMI' directory
-                print(f"Processing image path: {img_path}")
-                print(f"Extracted patient ID: {patient_id}")
+                patient_id = None
                 
-                # Check if patient exists in mapping
-                if patient_id in self.patient_to_idx:
-                    self.valid_indices.append(self.patient_to_idx[patient_id])
+                # Method 1: Look for PPMI directory and take ID after it
+                if 'PPMI' in path_parts:
+                    ppmi_index = path_parts.index('PPMI')
+                    if ppmi_index + 2 < len(path_parts):
+                        patient_id = path_parts[ppmi_index + 2]
+                
+                # Method 2: Extract from filename (often contains the ID)
+                if patient_id is None and len(path_parts) > 0:
+                    filename = path_parts[-1]
+                    if 'PPMI_' in filename:
+                        # Format: PPMI_3837_MR_T1-anatomical_...
+                        id_part = filename.split('_')[1]
+                        if id_part.isdigit():
+                            patient_id = id_part
+                
+                if patient_id and patient_id in self.patient_to_idx:
+                    if patient_id not in self.patient_to_images:
+                        self.patient_to_images[patient_id] = []
+                    self.patient_to_images[patient_id].append(img_path)
             except Exception as e:
-                print(f"Error processing path {img_path}: {str(e)}")
+                print(f"Error extracting patient ID from {img_path}: {str(e)}")
+        
+        # Create a list of valid indices (patients that have imaging data)
+        self.valid_indices = []
+        for patient_id, _ in self.patient_to_images.items():
+            if patient_id in self.patient_to_idx:
+                self.valid_indices.append(self.patient_to_idx[patient_id])
         
         print(f"Found {len(self.valid_indices)} patients with both tabular and imaging data")
         
@@ -100,6 +120,7 @@ class PPMIDataset(Dataset):
         
         # Set up augmentation transforms
         if augmentation is None:
+            # Default augmentations
             self.augmentation = tio.Compose([
                 tio.RandomAffine(
                     scales=(0.9, 1.1),
@@ -112,11 +133,44 @@ class PPMIDataset(Dataset):
                 tio.RandomBiasField(p=0.25),
                 tio.RescaleIntensity((0, 1))
             ])
+        elif isinstance(augmentation, list):
+            # Handle string-based augmentation names
+            if all(isinstance(a, str) for a in augmentation):
+                transform_list = []
+                for aug_name in augmentation:
+                    if aug_name == 'random_crop':
+                        # Use Resize instead of RandomCrop since torchio doesn't have RandomCrop
+                        transform_list.append(tio.Resize((img_size, img_size, img_size), p=0.5))
+                    elif aug_name == 'random_horizontal_flip':
+                        transform_list.append(tio.RandomFlip(axes=(1,), p=0.5))
+                    elif aug_name == 'random_vertical_flip':
+                        transform_list.append(tio.RandomFlip(axes=(2,), p=0.5))
+                    elif aug_name == 'random_rotation':
+                        # Use RandomAffine for rotation since TorchIO doesn't have RandomRotation
+                        transform_list.append(tio.RandomAffine(
+                            scales=(1.0, 1.0),  # No scaling
+                            degrees=15,  # 15 degrees rotation
+                            translation=0,  # No translation
+                            p=0.5
+                        ))
+                    elif aug_name == 'random_affine':
+                        transform_list.append(tio.RandomAffine(scales=(0.9, 1.1), degrees=10, translation=5, p=0.5))
+                    elif aug_name == 'random_noise':
+                        transform_list.append(tio.RandomNoise(p=0.5))
+                    elif aug_name == 'random_bias_field':
+                        transform_list.append(tio.RandomBiasField(p=0.5))
+                    elif aug_name == 'normalize':
+                        transform_list.append(tio.RescaleIntensity((0, 1)))
+                    else:
+                        print(f"Warning: Unknown augmentation '{aug_name}' will be skipped")
+                self.augmentation = tio.Compose(transform_list)
+            else:
+                # Convert list of transform objects to Compose
+                self.augmentation = tio.Compose(augmentation)
         else:
+            # Use provided composed transform
             self.augmentation = augmentation
             
-        self.augmentation_rate = augmentation_rate
-        
         # Generate marginal distributions for tabular data corruption
         if len(self.valid_indices) > 0:
             self.generate_marginal_distributions()
@@ -198,103 +252,97 @@ class PPMIDataset(Dataset):
         Returns:
             Preprocessed image tensor
         """
-        # Load NIfTI file
-        img = nib.load(img_path).get_fdata()
-        
-        # Convert to tensor and add channel dimension
-        img = torch.tensor(img, dtype=torch.float32).unsqueeze(0)
-        
-        # Apply basic preprocessing
-        img = self.transform(img)
-        
-        return img
+        try:
+            # Load NIfTI file
+            img = nib.load(img_path)
+            # Convert to tensor
+            img_data = torch.tensor(img.get_fdata(), dtype=torch.float32)
+            # Add channel dimension if needed
+            if len(img_data.shape) == 3:
+                img_data = img_data.unsqueeze(0)
+            # Apply transform
+            transformed_img = self.transform(tio.Subject(image=tio.ScalarImage(tensor=img_data)))
+            return transformed_img.image.data
+        except Exception as e:
+            print(f"Error loading image {img_path}: {str(e)}")
+            # Create a fallback image (all zeros) with the right dimensions
+            fallback_img = torch.zeros((1, self.img_size, self.img_size, self.img_size), dtype=torch.float32)
+            return fallback_img
             
     def generate_imaging_views(self, index: int) -> Tuple[List[torch.Tensor], torch.Tensor]:
         """
-        Generates two views of a subject's image
+        Generate augmented views of a subject's imaging data
         
         Args:
-            index: Index of the subject
+            index: Subject index
             
         Returns:
-            Tuple of (list of two image views, original image)
+            Tuple of (list of augmented views, original image)
         """
-        patient_id = self.patient_ids[self.valid_indices[index]]
-        patient_images = [img for img in self.image_paths if patient_id in img]
+        # Get patient ID for this index
+        patient_id = str(self.patient_ids[self.valid_indices[index]])
         
-        # Group images by modality
-        t1_images = [img for img in patient_images if 'T1-anatomical' in img]
-        fa_images = [img for img in patient_images if 'FA_map-MRI' in img]
+        # Find the corresponding image path
+        if patient_id not in self.patient_to_images or not self.patient_to_images[patient_id]:
+            raise ValueError(f"No images found for patient {patient_id}")
         
-        # Extract dates from filenames and sort by date
-        def extract_date(img_path):
-            # Extract date from path (format: YYYY-MM-DD_HH_MM_SS.0)
-            date_str = img_path.split('/')[-3]
-            return datetime.strptime(date_str, '%Y-%m-%d_%H_%M_%S.0')
+        # Use the first image for this patient
+        img_path = self.patient_to_images[patient_id][0]
         
-        # Sort images by date and get the most recent one for each modality
-        t1_images.sort(key=extract_date, reverse=True)
-        fa_images.sort(key=extract_date, reverse=True)
+        # Load and preprocess the image
+        t1_img = self.load_nifti_image(img_path)
         
-        if not t1_images or not fa_images:
-            raise ValueError(f"Missing required modality for patient {patient_id}. T1: {len(t1_images)}, FA: {len(fa_images)}")
+        # Create original view (unaugmented)
+        original_subject = tio.Subject(image=tio.ScalarImage(tensor=t1_img))
         
-        # Use the most recent scan for each modality
-        t1_path = t1_images[0]
-        fa_path = fa_images[0]
+        # Create augmented view if in training mode
+        if self.train and random.random() < self.augmentation_rate:
+            # Use augmentation as a callable (we've already converted lists to Compose in __init__)
+            augmented_subject = self.augmentation(original_subject)
+        else:
+            # No augmentation
+            augmented_subject = original_subject
         
-        # Load and preprocess images
-        t1_img = self.load_nifti_image(t1_path)
-        fa_img = self.load_nifti_image(fa_path)
+        # Extract the tensors from the subjects
+        original_tensor = original_subject.image.data
+        augmented_tensor = augmented_subject.image.data
         
-        # Generate views
-        t1_views = self.augmentation(tio.Subject(image=tio.ScalarImage(tensor=t1_img)))
-        fa_views = self.augmentation(tio.Subject(image=tio.ScalarImage(tensor=fa_img)))
+        return [augmented_tensor], original_tensor
         
-        # Combine views
-        imaging_views = torch.cat([t1_views.image.data, fa_views.image.data], dim=0)
-        
-        # Return unaugmented image for visualization
-        unaugmented_image = torch.cat([t1_img, fa_img], dim=0)
-        
-        return imaging_views, unaugmented_image
-        
-    def __getitem__(self, index: int) -> Dict[str, Any]:
+    def __getitem__(self, index: int) -> Tuple[List[torch.Tensor], List[torch.Tensor], torch.Tensor, torch.Tensor]:
         """
-        Get a data sample
+        Get a sample from the dataset
         
         Args:
             index: Index of the sample
             
         Returns:
-            Dictionary containing the sample data
+            Tuple of (imaging_views, tabular_views, patient_id, unaugmented_image)
         """
-        # Get valid index
-        valid_idx = self.valid_indices[index]
+        # Get tabular data
+        tabular_data = self.data_tabular[self.valid_indices[index]]
         
-        # Generate imaging views
+        # Apply one-hot encoding if needed
+        if self.one_hot_tabular:
+            tabular_data = self.one_hot_encode(tabular_data)
+        
+        # Create tabular views (original and corrupted)
+        tabular_views = [tabular_data]
+        if self.train:
+            # Add corrupted view for training
+            corrupted_data = self.corrupt(tabular_data)
+            tabular_views.append(corrupted_data)
+        else:
+            # Add identical view for validation/testing
+            tabular_views.append(tabular_data)
+        
+        # Get imaging views
         imaging_views, unaugmented_image = self.generate_imaging_views(index)
         
-        # Generate tabular views
-        tabular_data = self.data_tabular[valid_idx]
-        tabular_views = [
-            tabular_data,
-            self.corrupt(tabular_data)
-        ]
+        # Get patient ID 
+        patient_id = self.patient_ids[self.valid_indices[index]]
         
-        # One-hot encode if needed
-        if self.one_hot_tabular:
-            tabular_views = [self.one_hot_encode(tv) for tv in tabular_views]
-            
-        # Get patient ID
-        patient_id = self.patient_ids[valid_idx]
-        
-        return {
-            'imaging_views': imaging_views,
-            'tabular_views': tabular_views,
-            'unaugmented_image': unaugmented_image,
-            'patient_id': patient_id
-        }
+        return imaging_views, tabular_views, patient_id, unaugmented_image
         
     def __len__(self) -> int:
         """
