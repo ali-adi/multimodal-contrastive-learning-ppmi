@@ -1,4 +1,4 @@
-.DS_Store
+
 __pycache__
 wandb
 runs
@@ -7,3 +7,4 @@ env
 __pycache__
 *.csv
 *.pt
+.DS_Store
