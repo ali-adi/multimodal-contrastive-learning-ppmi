@@ -1,25 +1,29 @@
-import os 
-import sys
+import os
+import torch
+import pytorch_lightning as pl
+from pytorch_lightning.callbacks import ModelCheckpoint
+import warnings
+
+# Suppress warnings
+warnings.filterwarnings('ignore')
+os.environ["PYTHONWARNINGS"] = "ignore"
 
 from torch.utils.data import DataLoader
-import pytorch_lightning as pl
 from pytorch_lightning import Trainer
-from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor
+from pytorch_lightning.callbacks import LearningRateMonitor
 from pytorch_lightning.loggers import CSVLogger
 
-from utils.utils import grab_image_augmentations, grab_wids
+from utils.utils import grab_image_augmentations, grab_wids, grab_arg_from_checkpoint, prepend_paths, re_prepend_paths
 from utils.ssl_online_custom import SSLOnlineEvaluator
 
-from datasets.ContrastiveImagingAndTabularDataset import ContrastiveImagingAndTabularDataset
-from datasets.ContrastiveImageDataset import ContrastiveImageDataset
 from datasets.ContrastiveTabularDataset import ContrastiveTabularDataset
 from datasets.PPMIDataset import PPMIDataset
+from datasets.ImagingAndTabularDataset import ImagingAndTabularDataset
+from datasets.ImageDataset import ImageDataset
 
 from models.MultimodalSimCLR import MultimodalSimCLR
 from models.SimCLR import SimCLR
-from models.SwAV_Bolt import SwAV
 from models.BYOL_Bolt import BYOL
-from models.SimSiam_Bolt import SimSiam
 from models.BarlowTwins import BarlowTwins
 from models.SCARF import SCARF
 

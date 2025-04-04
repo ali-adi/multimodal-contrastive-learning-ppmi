@@ -6,6 +6,14 @@ import argparse
 import torch
 import pytorch_lightning as pl
 from pytorch_lightning.loggers import CSVLogger
+import warnings
+import logging
+
+# Suppress all warnings
+warnings.filterwarnings('ignore')
+logging.getLogger("pytorch_lightning").setLevel(logging.ERROR)
+os.environ["PYTHONWARNINGS"] = "ignore"
+os.environ["PL_DISABLE_WARNINGS"] = "1"
 
 from trainers.pretrain import pretrain
 from trainers.evaluate import evaluate

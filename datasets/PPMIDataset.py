@@ -3,6 +3,7 @@ import random
 import os
 from pathlib import Path
 from datetime import datetime
+import warnings
 
 import torch
 from torch.utils.data import Dataset
@@ -11,6 +12,9 @@ import numpy as np
 import nibabel as nib
 import torchio as tio
 from torchvision.transforms import transforms
+
+# Suppress TorchIO warnings
+warnings.filterwarnings('ignore', category=UserWarning, module='torchio')
 
 class PPMIDataset(Dataset):
     """
