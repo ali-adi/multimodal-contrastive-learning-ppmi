@@ -34,13 +34,17 @@ class Pretraining(pl.LightningModule):
     """
     Selects appropriate resnet encoder
     """
-    # Temporarily redirect stdout and stderr to avoid warnings
-    import io
-    from contextlib import redirect_stdout, redirect_stderr
-    with redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
-        self.encoder_imaging = torchvision_ssl_encoder(self.hparams.model)
+    # Use torchvision.models directly instead of pl_bolts
+    if self.hparams.model == 'resnet50':
+        self.encoder_imaging = torchvision.models.resnet50(pretrained=False)
+        self.pooled_dim = 2048
+    else:
+        self.encoder_imaging = torchvision.models.resnet18(pretrained=False)
+        self.pooled_dim = 512
     
-    self.pooled_dim = 2048 if self.hparams.model=='resnet50' else 512
+    # Remove the final fully connected layer
+    self.encoder_imaging = torch.nn.Sequential(*list(self.encoder_imaging.children())[:-1])
+    
     self.projector_imaging = SimCLRProjectionHead(self.pooled_dim, self.hparams.embedding_dim, self.hparams.projection_dim)
 
   def initialize_tabular_encoder_and_projector(self) -> None:
